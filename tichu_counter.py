@@ -9,9 +9,12 @@ COLOR_INACTIVE = pg.Color('lightskyblue3')
 COLOR_ACTIVE = pg.Color('dodgerblue2')
 BORDER_COLOR = pg.Color('gray')
 FONT = pg.font.Font(None, 32)
+isquitted = False
 
 
 class InputBox:
+    # Text Input Box in Pygame
+    # https://stackoverflow.com/questions/46390231/how-can-i-create-a-text-input-box-with-pygame
     def __init__(self, x, y, w, h, text=''):
         self.rect = pg.Rect(x, y, w, h)
         self.color = COLOR_INACTIVE
@@ -197,7 +200,6 @@ class Roundboard:
             onetwo_rect = onetwo.get_rect(center=(width*6/9, y+round_height/2))
             screen.blit(onetwo, onetwo_rect)
         
-
 class Historyboard:
     def __init__(self, sc_width, sc_height) -> None:
         self.width = sc_width
@@ -295,6 +297,10 @@ class Tichu:
             filename = now.strftime('%Y%m%d-%H%M%S-tichu-history.txt')
             with open(filename, 'w+') as f:
                 f.write('\n'.join(self.cmd_history))
+        elif(cmd == "quit"):
+            global isquitted
+            isquitted = True
+            self.command("end")
         print(cmd)
 
     def draw(self, screen):
@@ -316,6 +322,9 @@ def main():
                 done = True
             for box in input_boxes:
                 box.handle_event(event, tichu)
+        
+        if isquitted:
+            break
 
         for box in input_boxes:
             box.update()
