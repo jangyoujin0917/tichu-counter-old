@@ -1,0 +1,10 @@
+lt claim 1
+lt claim 2
+lt fail 1
+lt success 2
+score 120 -20
+st claim 3
+st claim 2
+st success 3
+st fail 2
+onetwo red

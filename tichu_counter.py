@@ -1,5 +1,7 @@
 import pygame as pg
 import datetime
+import os
+import pandas as pd
 
 pg.init()
 SCREEN_WIDTH = 1280
@@ -199,6 +201,28 @@ class Roundboard:
             onetwo = font.render("1/2", True, pg.Color('white'), pg.Color('blue'))
             onetwo_rect = onetwo.get_rect(center=(width*6/9, y+round_height/2))
             screen.blit(onetwo, onetwo_rect)
+    
+    def to_dict(self): # for stats
+        tmp = {}
+        tmp["red_score"] = self.red_score
+        tmp["blue_score"] = self.blue_score
+
+        rt = []
+        if self.red_tichu[0][0]!='':
+            rt.append(self.red_tichu[0][0]+" "+("success" if self.red_tichu[0][1]==1 else "fail"))
+        if self.red_tichu[1][0]!='':
+            rt.append(self.red_tichu[1][0]+" "+("success" if self.red_tichu[1][1]==1 else "fail"))
+        tmp["red_tichu"] = " / ".join(rt)
+        bt = []
+        if self.blue_tichu[0][0]!='':
+            bt.append(self.blue_tichu[0][0]+" "+("success" if self.blue_tichu[0][1]==1 else "fail"))
+        if self.blue_tichu[1][0]!='':
+            bt.append(self.blue_tichu[1][0]+" "+("success" if self.blue_tichu[1][1]==1 else "fail"))
+        tmp["blue_tichu"] = " / ".join(bt)
+
+        tmp["red_onetwo"] = '1/2' if self.red_onetwo else ''
+        tmp["blue_onetwo"] = '1/2' if self.blue_onetwo else ''
+        return tmp
         
 class Historyboard:
     def __init__(self, sc_width, sc_height) -> None:
@@ -237,6 +261,49 @@ class Historyboard:
             if len(self.round_arr)-i > 0:
                 self.round_arr[-i-1].draw(screen, start_height, self.width, self.height)
             start_height += self.round_height
+    
+    def history(self):
+        stats_arr = []
+        rs = 0
+        bs = 0
+        for round in self.round_arr[:-1]:
+            d = round.to_dict()
+            rs += d["red_score"]
+            bs += d["blue_score"]
+            tmp_arr = [d["red_onetwo"], d["red_tichu"], d["red_score"], rs, '', bs, d["blue_score"], d["blue_tichu"], d["blue_onetwo"]]
+            stats_arr.append(tmp_arr)
+        return stats_arr
+    
+    def stats(self):
+        stats_arr = [] # score, lt rate, st rate, onetwo count, max_score
+        red_score = sum([i.red_score for i in self.round_arr])
+        blue_score = sum([i.blue_score for i in self.round_arr])
+        stats_arr.append([red_score, blue_score])
+
+        red_tichu = []
+        blue_tichu = []
+        for i in self.round_arr:
+            red_tichu.extend(i.red_tichu)
+            blue_tichu.extend(i.blue_tichu)
+        red_lt = [len([x for x in red_tichu if x==("LT", 1)]), len([x for x in red_tichu if x[0]=="LT"])]
+        blue_lt = [len([x for x in blue_tichu if x==("LT", 1)]), len([x for x in blue_tichu if x[0]=="LT"])]
+        red_st = [len([x for x in red_tichu if x==("ST", 1)]), len([x for x in red_tichu if x[0]=="ST"])]
+        blue_st = [len([x for x in blue_tichu if x==("ST", 1)]), len([x for x in blue_tichu if x[0]=="ST"])]
+        def transform(x):
+            if x[1]==0:
+                return "-"
+            return f"{(x[0]/x[1]*100):0.1f}% ({x[0]} / {x[1]})"
+        stats_arr.append([transform(red_lt), transform(blue_lt)])
+        stats_arr.append([transform(red_st), transform(blue_st)])
+
+        stats_arr.append([sum(x.red_onetwo for x in self.round_arr), sum(x.blue_onetwo for x in self.round_arr)])
+
+        red_score = max([i.red_score for i in self.round_arr])
+        blue_score = max([i.blue_score for i in self.round_arr])
+        stats_arr.append([red_score, blue_score])
+
+        return stats_arr
+
 
 class Tichu:
     def __init__(self, sc_width, sc_height) -> None:
@@ -280,10 +347,18 @@ class Tichu:
                 self.historyboard.change_state("ST", int(contents[2]), -1)
             else:
                 self.cmd_history.pop()
+        elif(len(contents)==2 and contents[0] in ["stc", "sts", "stf", "ltc", "lts", "ltf"]):
+            conversion = {"stc":"st claim", "sts":"st success", "stf":"st fail", "ltc":"lt claim", "lts":"lt success", "ltf":"lt fail"}
+            self.command(conversion[contents[0]]+" "+contents[1])
         elif(contents[0] == "score" and len(contents)==3 and contents[1].lstrip("-").isdecimal() and contents[2].lstrip("-").isdecimal()): # total score to scoreboard
             red_score, blue_score = self.historyboard.score(int(contents[1]), int(contents[2]))
             self.scoreboard.add_score(red_score, blue_score)
             self.cmd_history.append(cmd)
+        elif(contents[0] == "score" and len(contents)==3 and (contents[1] in ["red", "blue"]) and contents[2].lstrip("-").isdecimal()): # total score to scoreboard - alias
+            score = int(contents[2])
+            red_score = score if contents[1]=="red" else 100-score
+            blue_score = score if contents[1]=="blue" else 100-score
+            self.command("score "+str(red_score)+" "+str(blue_score))
         elif(cmd == "onetwo red"):
             red_score, blue_score = self.historyboard.onetwo(1)
             self.scoreboard.add_score(red_score, blue_score)
@@ -294,13 +369,38 @@ class Tichu:
             self.cmd_history.append(cmd)
         elif(cmd == "end"): # if end, save history
             now = datetime.datetime.now()
-            filename = now.strftime('%Y%m%d-%H%M%S-tichu-history.txt')
-            with open(filename, 'w+') as f:
+            filename = now.strftime('%Y%m%d-%H%M%S-tichu-history')
+            self.command("end "+filename)
+        elif(len(contents)==2 and contents[0] == "end"):
+            filename = contents[1]
+            os.makedirs("history/"+filename)
+            with open("history/"+filename+"/cmd_history.txt", 'w+') as f:
                 f.write('\n'.join(self.cmd_history))
+            
+            history = self.historyboard.history()
+            stats = self.historyboard.stats()
+            with pd.ExcelWriter("history/"+filename+"/statistics.xlsx", engine='xlsxwriter') as writer:
+                df = pd.DataFrame(history)
+                df.index = [i+1 for i in range(len(df.index))]
+                df.columns = ["RED_ONETWO", "RED_TICHU", "RED_ROUND", "RED_TOTAL", "VS", "BLUE_TOTAL", "BLUE_ROUND", "BLUE_TICHU", "BLUE_ONETWO"]
+                df.to_excel(writer, "History")
+
+                history_sheet = writer.sheets["History"]
+                history_sheet.set_column(0, 9, 15)
+                history_sheet.set_column(2, 2, 22)
+                history_sheet.set_column(8, 8, 22)
+                history_sheet.set_column(5, 5, 6)
+
+                df2 = pd.DataFrame(stats)
+                df2.index = ["SCORE", "LT RATE", "ST RATE", "ONETWO", "MAX"]
+                df2.columns = ["RED", "BLUE"]
+                df2.to_excel(writer, "Stats")
+                stats_sheet = writer.sheets["Stats"]
+                stats_sheet.set_column(0, 2, 10)
         elif(cmd == "quit"):
+            self.command("end")
             global isquitted
             isquitted = True
-            self.command("end")
         print(cmd)
 
     def draw(self, screen):
