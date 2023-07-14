@@ -2,6 +2,7 @@ import pygame as pg
 import datetime
 import os
 import pandas as pd
+import matplotlib.pyplot as plt
 
 pg.init()
 SCREEN_WIDTH = 1280
@@ -397,6 +398,18 @@ class Tichu:
                 df2.to_excel(writer, "Stats")
                 stats_sheet = writer.sheets["Stats"]
                 stats_sheet.set_column(0, 2, 10)
+
+                red_score = [0]+df["RED_TOTAL"].tolist()
+                blue_score = [0]+df["BLUE_TOTAL"].tolist()
+                rounds = list(range(len(red_score)))
+                plt.plot(rounds, red_score, 'r', label="RED TEAM")
+                plt.plot(rounds, blue_score, 'b', label="BLUE TEAM")
+                plt.xlabel('ROUND')
+                plt.ylabel('SCORE')
+                plt.title('RED vs BLUE')
+                plt.xticks(rounds)
+                plt.savefig("history/"+filename+"/graph.png")
+
         elif(cmd == "quit"):
             self.command("end")
             global isquitted
