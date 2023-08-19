@@ -66,6 +66,8 @@ class Scoreboard:
         self.blue_score = 0
         self.width = sc_width
         self.height = sc_height
+        self.red_name = "RED TEAM"
+        self.blue_name = "BLUE TEAM"
         self.rect1 = pg.Rect(0, 0, sc_width//2, sc_height*3//10)
         self.rect2 = pg.Rect(sc_width//2, 0, sc_width, sc_height*3//10)
 
@@ -77,6 +79,12 @@ class Scoreboard:
     def add_score(self, red, blue):
         self.red_score += red
         self.blue_score += blue
+    
+    def rename_red(self, name):
+        self.red_name = name
+    
+    def rename_blue(self, name):
+        self.blue_name = name
     
     def draw(self, screen):
         pg.draw.rect(screen, BORDER_COLOR, self.rect1, 1)
@@ -91,8 +99,8 @@ class Scoreboard:
         screen.blit(self.blue_score_txt, text_rect)
 
         team_font = pg.font.Font(None, 50)
-        red_team_txt = team_font.render('RED TEAM (1, 3)', True, pg.Color('white'), pg.Color('red'))
-        blue_team_txt = team_font.render('BLUE TEAM (2, 4)', True, pg.Color('white'), pg.Color('blue'))
+        red_team_txt = team_font.render(self.red_name + ' (1, 3)', True, pg.Color('white'), pg.Color('red'))
+        blue_team_txt = team_font.render(self.blue_name + ' (2, 4)', True, pg.Color('white'), pg.Color('blue'))
         
         text_rect = red_team_txt.get_rect(center=(self.width//4, self.height//10))
         screen.blit(red_team_txt, text_rect)
@@ -324,6 +332,12 @@ class Tichu:
             self.cmd_history = []
             for c in cmd_history:
                 self.command(c)
+        elif(contents[0] == "rename" and (contents[1] in ["red", "blue"]) and len(contents)>=3):
+            name = ' '.join(contents[2:])
+            if(contents[1] == "red"):
+                self.scoreboard.rename_red(name)
+            else:
+                self.scoreboard.rename_blue(name)
         elif(contents[0] == "force" and len(contents)==3 and contents[1].lstrip("-").isdecimal() and contents[2].lstrip("-").isdecimal()):
             self.scoreboard.add_score(int(contents[1]), int(contents[2]))
             self.historyboard.force(int(contents[1]), int(contents[2]))
@@ -383,7 +397,7 @@ class Tichu:
             with pd.ExcelWriter("history/"+filename+"/statistics.xlsx", engine='xlsxwriter') as writer:
                 df = pd.DataFrame(history)
                 df.index = [i+1 for i in range(len(df.index))]
-                df.columns = ["RED_ONETWO", "RED_TICHU", "RED_ROUND", "RED_TOTAL", "VS", "BLUE_TOTAL", "BLUE_ROUND", "BLUE_TICHU", "BLUE_ONETWO"]
+                df.columns = ["RED_ONETWO", "RED_TICHU", "RED_ROUND", self.scoreboard.red_name, "VS", self.scoreboard.blue_name, "BLUE_ROUND", "BLUE_TICHU", "BLUE_ONETWO"]
                 df.to_excel(writer, "History")
 
                 history_sheet = writer.sheets["History"]
@@ -394,19 +408,20 @@ class Tichu:
 
                 df2 = pd.DataFrame(stats)
                 df2.index = ["SCORE", "LT RATE", "ST RATE", "ONETWO", "MAX"]
-                df2.columns = ["RED", "BLUE"]
+                df2.columns = [self.scoreboard.red_name, self.scoreboard.blue_name]
                 df2.to_excel(writer, "Stats")
                 stats_sheet = writer.sheets["Stats"]
                 stats_sheet.set_column(0, 2, 10)
 
-                red_score = [0]+df["RED_TOTAL"].tolist()
-                blue_score = [0]+df["BLUE_TOTAL"].tolist()
+                red_score = [0]+df[self.scoreboard.red_name].tolist()
+                blue_score = [0]+df[self.scoreboard.blue_name].tolist()
                 rounds = list(range(len(red_score)))
-                plt.plot(rounds, red_score, 'r', label="RED TEAM")
-                plt.plot(rounds, blue_score, 'b', label="BLUE TEAM")
+                plt.plot(rounds, red_score, 'r', label=self.scoreboard.red_name)
+                plt.plot(rounds, blue_score, 'b', label=self.scoreboard.blue_name)
                 plt.xlabel('ROUND')
                 plt.ylabel('SCORE')
-                plt.title('RED vs BLUE')
+                plt.title(filename)
+                plt.legend([self.scoreboard.red_name, self.scoreboard.blue_name])
                 plt.xticks(rounds)
                 plt.savefig("history/"+filename+"/graph.png")
 
